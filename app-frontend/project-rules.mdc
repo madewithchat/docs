@@ -1,0 +1,226 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+## Cursor Rules: app-frontend
+
+This document outlines the high-level structure of the `app-frontend` Next.js application, focusing on key architectural components.
+
+### Directory Structure Overview
+
+- **`app/`**: Contains the core application logic, including pages, layouts, and API route handlers. This follows the Next.js App Router conventions.
+  - **`(auth)/`**: Authentication pages (log-in, sign-up, reset-password, new-password) with dedicated layouts
+  - **`api/`**: API hooks and request handlers organized by domain (auth, documents, projects, questions, etc.)
+  - **`inbox/`**: Real-time conversation/messaging interface with dynamic routing
+  - **`project/`**: Main project workspace with document editing capabilities
+  - **`services/`**: Business logic services for RPC communication and conversation handling
+- **`components/`**: Houses reusable UI components with specialized subdirectories:
+  - **`ui/`**: Basic UI primitives (buttons, inputs, modals, etc.)
+  - **`tiptap-*/`**: Comprehensive rich text editor components, extensions, nodes, and UI elements
+  - **`sidebar/`**: Navigation and project management components
+- **`constants/`**: Application-wide constants including document defaults
+- **`hooks/`**: Custom React hooks for editor control, window management, navigation, transcription, and document logic
+- **`lib/`**: Utility functions including API client, TipTap utilities, and hover services
+- **`public/`**: Static assets (logos, icons, mockups)
+- **`stores/`**: Global state management using Zustand with slice-based architecture
+- **`styles/`**: Global SCSS with variables and keyframe animations
+
+### Key Architectural Components
+
+#### 1. Authentication System (`app/(auth)/`)
+
+The application features a comprehensive authentication system with dedicated routes and components:
+
+- **Pages**:
+  - Login: `app/(auth)/log-in/page.tsx` with `components/LoginForm.tsx`
+  - Registration: `app/(auth)/sign-up/page.tsx` with `components/SignUpForm.tsx`
+  - Password reset flow: `app/(auth)/reset-password/page.tsx` with multi-step components in `app/(auth)/reset-password/components/`
+    - `InitialResetView.tsx`, `EmailSentView.tsx`, `SetNewPasswordView.tsx`, `PasswordResetSuccessView.tsx`
+  - New password: `app/(auth)/new-password/page.tsx`
+- **Components**:
+  - Form validation in `app/(auth)/reset-password/hooks/usePasswordForm.ts`
+  - Password strength indicators in `app/(auth)/reset-password/components/PasswordStrengthIndicator.tsx`
+  - Validation utilities in `app/(auth)/reset-password/utils/passwordValidation.ts`
+- **Hooks**: Authentication hooks in `app/api/auth/hooks/`:
+  - `useLogin.ts`, `useLogout.ts`, `useRegister.ts`, `useCurrentUser.ts`
+  - `useRequestPasswordReset.ts`, `useResetPassword.ts`
+- **Middleware**: Route protection via `middleware.ts` that handles authentication state and redirects
+- **Provider**: `components/AuthProvider.tsx` wraps the application and manages auth state
+- **API Layer**: Request functions in `app/api/auth/requests.ts`
+
+#### 2. Rich Text Editor System (`components/tiptap-*`)
+
+The application uses TipTap for sophisticated document editing with custom extensions:
+
+- **Extensions** (`components/tiptap-extension/`):
+  - `custom-document-extension.ts` - Core document functionality
+  - `document-attributes-extension.ts` - Document visibility and lock controls
+  - `segment-extension.ts` - Content segmentation with styling in `segment-extension.scss`
+  - `suggestion-setup.ts` - AI suggestion and diff handling
+  - `unique-id-extension.ts` - Automatic unique ID generation for document nodes with debounced updates
+  - `link-extension.ts`, `selection-extension.ts` - Link handling and text selection management
+  - `empty-node-cleanup-extension.ts`, `trailing-node-extension.ts` - Document cleanup utilities
+- **Nodes** (`components/tiptap-node/`):
+  - Code blocks: `code-block-node/` with `code-block-node.scss`
+  - Images: `image-node/`, `image-upload-node/` with custom components
+  - Lists: `list-node/` with `list-node.scss`
+  - Paragraphs: `paragraph-node/` with `paragraph-node.scss`
+- **UI Components** (`components/tiptap-ui/`):
+  - Toolbar elements: `heading-button/`, `list-button/`, `mark-button/`, `node-button/`
+  - Dropdowns: `heading-dropdown-menu/`, `list-dropdown-menu/`
+  - Interactive elements: `highlight-popover/`, `link-popover/`, `image-upload-button/`
+- **Templates**:
+  - Simple editor in `components/tiptap-templates/simple/simple-editor.tsx`
+  - Theme toggle in `components/tiptap-templates/simple/theme-toggle.tsx`
+- **Editor Control**: Advanced document editor control system in `hooks/useDocumentEditorControl.ts`
+- **Icons**: Comprehensive icon set in `components/tiptap-icons/`
+
+#### 3. Layout System (`app/MainLayoutContent.tsx`)
+
+Complex responsive layout with resizable panels:
+
+- **Main Layout**: `app/MainLayoutContent.tsx` - Core three-panel layout implementation
+- **Layout Configuration**: `app/layout.tsx` - Root layout with conditional rendering
+- **Resizable Panels**: Using `@radix-ui/react-resizable-panels` from `components/ui/resizable.tsx`
+- **Sidebar Components**:
+  - App sidebar: `components/Sidebar.tsx` with UI components in `components/ui/sidebar.tsx`
+  - Project sidebar: `components/ProjectSidebar.tsx`
+  - Conversation sidebar: `components/ConversationSidebar.tsx`
+- **State Persistence**: Panel sizes saved to localStorage with keys in `MainLayoutContent.tsx`
+- **Panel Control**: Dynamic showing/hiding based on `useActiveDocumentId()` from global store
+
+#### 4. Global Store (`stores/global`)
+
+Zustand-based state management with slice architecture:
+
+- **Store Definition**: `stores/global/store.ts` - Main store with individual and grouped hooks
+- **Slices** (`stores/global/slices/`):
+  - `authSlice.ts` - User authentication state and actions
+  - `projectSlice.ts` - Project selection and document navigation
+  - `documentSlice.ts` - Document content, attributes, and editor registry
+  - `conversationSlice.ts` - Real-time messaging and plan management
+  - `uiSlice.ts` - Modal states, sidebar controls, loading states
+  - `hoverSlice.ts` - Component hover tracking for AI context
+  - `rpcSlice.ts` - RPC connection state and action handlers
+- **Types**: Comprehensive TypeScript types in `stores/global/types.ts`
+- **Exports**: All store exports consolidated in `stores/global/index.ts`
+- **Usage Pattern**: Use individual hooks like `useSelectedProjectId()`, `useActiveDocumentId()` to prevent re-renders
+
+#### 5. API Layer (`app/api/**/`)
+
+React Query-based data fetching with domain-specific organization:
+
+- **Authentication** (`app/api/auth/`):
+  - Hooks: `hooks/useCurrentUser.ts`, `hooks/useLogin.ts`, etc.
+  - Requests: `requests.ts` with `loginUserRequest`, `registerUserRequest`
+- **Documents** (`app/api/documents/`):
+  - Hooks: `hooks/useGetDocument.ts`, `hooks/useCreateDocument.ts`, `hooks/useUpdateDocument.ts`
+  - Requests: `requests.ts` with CRUD operations
+- **Projects** (`app/api/projects/`):
+  - Hooks: `hooks/useGetProjects.ts`, `hooks/useCreateProject.ts`
+  - Requests: `requests.ts` with project management
+- **Questions** (`app/api/questions/`):
+  - Hooks: `hooks/useGetQuestions.ts`, `hooks/useCreateQuestion.ts`, `hooks/useSnoozeQuestion.ts`
+  - Requests: `requests.ts` with question operations
+- **Conversation Messages** (`app/api/summarized-conversation-messages/`):
+  - Full CRUD hooks in `hooks/` directory
+  - Pagination and filtering support in `requests.ts`
+- **User Preferences** (`app/api/users/preferences/`):
+  - Hooks: `hooks/useUserPreferences.ts`, `hooks/useUpdateUserPreferences.ts`
+- **Shared Types**: `app/api/interfaces.ts` - All API interfaces and payloads
+- **API Client**: `lib/apiClient.ts` - Centralized HTTP client with error handling
+
+#### 6. Real-time Services (`app/services/`)
+
+- **RPC Service** (`app/services/rpc/rpcService.ts`):
+  - Registers RPC methods: `selectDocument`, `createDocument`, `editDocument`, `applySuggestion`
+  - Uses global store `rpcActions` from `stores/global/slices/rpcSlice.ts`
+  - Handles semantic diff operations with `RpcSemanticDiffOperation` types
+- **RPC Types** (`app/services/rpc/types.ts`):
+  - Payload interfaces: `CreateQuestionPayload`, `ApplySuggestionPayload`, `PlanUpdatePayload`
+  - Semantic diff operations: `RpcSemanticDiffOperation`
+- **Conversation Service** (`app/services/conversationService.ts`):
+  - Handles LiveKit events: `conversation.summary.created`, `conversation.summary.updated`
+  - Integrates with global store conversation slice
+  - Manages transcription handling with `TranscriptionWithRole`
+
+#### 7. Voice Assistant Integration
+
+- **LiveKit Integration**:
+  - Connection details in `app/api/connection-details/route.ts`
+  - Room context in `app/contexts/RoomContext.tsx`
+- **Transcription System**:
+  - Combined transcriptions in `hooks/useCombinedTranscriptions.ts`
+  - Local mic track handling in `hooks/useLocalMicTrack.ts`
+  - Transcription display in `components/TranscriptionView.tsx`
+- **Conversation Management**:
+  - Message components: `components/MessageBubble.tsx`, `components/MessageList.tsx`
+  - Conversation slice in `stores/global/slices/conversationSlice.ts`
+- **Audio Visualization**: `components/AudioWave.tsx` with custom styling
+
+#### 8. Inbox/Conversation System (`app/inbox/`)
+
+- **Layout**: `app/inbox/layout.tsx` with sidebar integration
+- **Pages**:
+  - Main inbox: `app/inbox/page.tsx`
+  - Individual conversations: `app/inbox/[conversationId]/page.tsx`
+- **Components**:
+  - Conversation sidebar: `components/ConversationSidebar.tsx`
+  - Message bubbles with role-based styling in conversation pages
+  - Typing indicators: `components/TypingIndicator.tsx`
+
+#### 9. Document Management System
+
+- **Editor Control**: `hooks/useDocumentEditorControl.ts` with comprehensive `DocumentEditorControl` interface
+- **Document State Management**:
+  - Content tracking in `stores/global/slices/documentSlice.ts`
+  - Document attributes (availability, lock status) in store
+  - Segments extraction in `hooks/useSegmentLogic.ts`
+- **Suggestion System**:
+  - Suggestion setup in `components/tiptap-extension/suggestion-setup.ts`
+  - Accept/reject functionality in editor control hooks
+  - Semantic diff application via RPC
+- **Constants**: Document defaults in `constants/document.ts`
+
+#### 10. Question & Planning System
+
+- **Question Management**:
+  - API hooks in `app/api/questions/hooks/` for CRUD operations
+  - Question display in `components/QuestionCard.tsx`, `components/QuestionItem.tsx`
+  - Questions modal in `components/QuestionsModal.tsx`
+- **Plan System**:
+  - Plan state in `stores/global/slices/conversationSlice.ts`
+  - Plan updates via RPC in `stores/global/slices/rpcSlice.ts`
+  - Progress tracking with step status management
+- **Floating Action Button**:
+  - Main component: `components/FloatingActionButton.tsx`
+  - Integrates with current questions and templates from conversation slice
+  - Context-aware based on active document and hover state
+
+### General Guidelines for Cursor
+
+- **Authentication**: Use `components/AuthProvider.tsx` and auth hooks from `app/api/auth/hooks/` for user management
+- **Document Editing**: Leverage the TipTap system in `components/tiptap-*` and `hooks/useDocumentEditorControl.ts` for document operations
+- **State Management**: Use slice-specific hooks from `stores/global/store.ts`; avoid creating new state when possible
+- **API Calls**: Extend existing domain-specific hooks in `app/api/*/hooks/` rather than creating direct API calls
+- **Real-time Features**: Utilize `app/services/rpc/rpcService.ts` for agent communication and `app/services/conversationService.ts` for messaging
+- **UI Components**: Use existing UI primitives in `components/ui/` and TipTap components; maintain consistent styling patterns
+- **Route Protection**: Ensure new routes are properly handled in `middleware.ts`
+- **Layout Changes**: Consider impact on the three-panel layout system in `app/MainLayoutContent.tsx`
+- **Performance**: Use individual hooks from global store to prevent unnecessary re-renders
+- **Testing**: Always run `npm run build` to verify TypeScript compilation after changes
+
+### Development Patterns
+
+- **Component Organization**: Group related components in subdirectories with index files for clean imports
+- **Hook Patterns**: Create custom hooks for complex logic; use existing hooks in `hooks/` as examples
+- **Error Handling**: Use toast notifications (`sonner`) for user feedback; implement proper error boundaries
+- **Accessibility**: Maintain keyboard navigation and screen reader support in custom components
+- **Responsive Design**: Consider mobile layouts and responsive behavior for new features
+
+- For real-time interactions with the agent, changes will likely involve the `rpcService.ts` or its handlers.
+- Maintain consistency with existing naming conventions and file structures.
+- Follow SOLID principles.
+- Always try to run `npm run build` to check the solution after each iteration.
